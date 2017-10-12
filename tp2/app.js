@@ -18,69 +18,127 @@ var connector = new builder.ChatConnector({
 server.post('/api/messages', connector.listen());
 
 
+('/api/messages', connector.listen()); 
+
 var bot = new builder.UniversalBot(connector, [
-    function (session){
+    function(session){
         session.beginDialog('greetings');
-    },
-]);
-// Dialogue par défaut
-bot.dialog('greetings',[
-    function(session){
-        session.beginDialog('askName');
-    },
-    function(session){
-        session.beginDialog('resa');
-    },
+    }
 ]);
 
-// Dialogue de demande de nom
-bot.dialog('askName',[
+var Menu = {
+    "Demander mon nom": {
+        item: "askName"
+    },
+    "Reserver":{
+        item: "reservation"
+    },
+}
+
+bot.dialog('greetings', [
     function(session){
-        builder.Prompts.text(session, 'Bienvenue Dans BotResa quel est ton prénom ?');
+        builder.Prompts.choice(session, "Bienvenue, vous souhaitez ? ", Menu);
+    },
+    function (session, results) {
+        if(results.response){
+            session.beginDialog(Menu[results.response.entity].item);
+        }
+    }
+])
+.triggerAction({
+    matches: /^main menu$/i,
+    confirmPrompt: 'Retourner au menu ?'
+});
+
+bot.dialog('askName', [
+    function(session){
+        builder.Prompts.text(session, 'Quel est votre prénom ?');
     },
     function(session, results){
         session.endDialog('Bonjour %s!', results.response);
+    },
+]).cancelAction(
+    "cancelname", "Tapez main menu pour continuer.",
+    {
+        matches: /^cancel$/i,
+        confirmPrompt: 'Retourner au menu ?'
     }
-]);
+);
 
-//Dialogue de Résevation
-bot.dialog('resa', [
+bot.dialog('reservation', [
     function (session) {
-        session.beginDialog('stepResa');
+        session.beginDialog('telMe');
     },
     function (session, results) {
-        session.send(`Votre réservation : <br/>
-        Date : ${results.Date} <br/>
-        Nombre de personne : ${results.nbPeople} <br/>
-        Nom de la réservation : ${results.resaName}`);
+        session.send(`Voici votre reservation : <br/>
+        Date de reservation : ${results.date}<br/>
+        Nombre de personne : ${results.nbPeople}<br/>
+        Au nom de : ${results.resaName}<br/>
+        Telephone : ${results.resaTel}`);
     }
-]);
+])
+.cancelAction(
+    "cancelreservation", "Tapez main menu pour continuer.",
+    {
+        matches: /^cancel$/i,
+        confirmPrompt: 'Stopper tout ?'
+    }
+)
+.reloadAction(
+    "reloadreservation", "",
+    {
+        matches: /^reload$/i,
+    }
+)
 
-
-// Dialogue étape de résa
-bot.dialog('stepResa', [
+bot.dialog('telMe', [
     function (session) {
         builder.Prompts.text(session, 'Pour quelle date souhaitez vous une reservation ?');
     },
     function (session, results) {
-        // Svg de la date
-        session.dialogData.Date = results.response;
+        session.dialogData.date = results.response;
         builder.Prompts.number(session, 'Pour combien de personne ?');
     },
     function (session, results) {
-        // Svg de du nombre de personne
         session.dialogData.nbPeople = results.response;
-        builder.Prompts.text(session, 'Quel est le nom de la personne qui réserve ?');
+        builder.Prompts.text(session, 'A quel nom ?');
     },
     function (session, results) {
-        // Svg du nom de reservation
         session.dialogData.resaName = results.response;
+        // builder.Prompts.number(session, 'Quel est votre numero de telephone ?');
+        session.beginDialog('phonePrompt');
+    },
+    function (session, results) {
+        session.dialogData.resaTel = results.response;
         var finalResults = {
-            Date: session.dialogData.Date,
+            date: session.dialogData.date,
             nbPeople: session.dialogData.nbPeople,
-            resaName: session.dialogData.resaName
+            resaName: session.dialogData.resaName,
+            resaTel: session.dialogData.resaTel
         }
         session.endDialogWithResult(finalResults);
+    }
+]);
+
+//Dialogue du teléphone 
+bot.dialog('phonePrompt', [
+    function (session, args) {
+        if (args && args.reprompt) {
+            builder.Prompts.text(session, "Veuillez utiliser un bon format de numero.")
+        } else {
+            builder.Prompts.text(session, "Quel est le numero de tel ?");
+        }
+    },
+    function (session, results) {
+        var matched = results.response.match(/\d+/g);
+        var number = matched ? matched.join('') : '';
+        if (number.length == 10 || number.length == 11) {
+            session.userData.phoneNumber = number;
+            session.endDialogWithResult({ response: number });
+        } else {
+            // Repetition du dialogue
+            session.replaceDialog('phonePrompt', { reprompt: true });
+        }
     }
 ]);
 
@@ -102,4 +160,8 @@ Récapitulatif résa
     Nb personne
     Le nom de reservation
 
+*/
+
+/* 
+    Menu des deux dialogues 
 */
